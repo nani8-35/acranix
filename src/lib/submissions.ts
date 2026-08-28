@@ -1,3 +1,5 @@
+import { getToken } from './auth';
+
 export interface FormSubmission {
   id: string;
   name: string;
@@ -6,13 +8,14 @@ export interface FormSubmission {
   portfolioOrGithub: string;
   message: string;
   submittedAt: string;
+  isRead: boolean;
   status: 'new' | 'reviewed' | 'contacted' | 'archived';
   notes?: string;
 }
 
 const STORAGE_KEY = 'acranix_builder_applications';
 
-export function getStoredSubmissions(): FormSubmission[] {
+export function getLocalStoredSubmissions(): FormSubmission[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
@@ -23,66 +26,271 @@ export function getStoredSubmissions(): FormSubmission[] {
   }
 }
 
-export function saveSubmission(entry: Omit<FormSubmission, 'id' | 'submittedAt' | 'status'>): FormSubmission {
-  const newSubmission: FormSubmission = {
-    ...entry,
-    id: `app_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-    submittedAt: new Date().toISOString(),
-    status: 'new',
-  };
-
+export function saveLocalSubmissions(subs: FormSubmission[]): void {
   try {
-    const current = getStoredSubmissions();
-    const updated = [newSubmission, ...current];
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-    // Dispatch custom event so any open admin viewer or badge updates reactively
-    window.dispatchEvent(new CustomEvent('acranix_submission_updated'));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(subs));
   } catch (err) {
-    console.error('Failed to save submission:', err);
+    console.error('Failed to write submissions to storage:', err);
   }
-
-  return newSubmission;
 }
 
-export function updateSubmissionStatus(id: string, status: FormSubmission['status'], notes?: string): void {
+export const getStoredSubmissions = getLocalStoredSubmissions;
+export const saveSubmission = submitJoinForm;
+
+// ----------------- PUBLIC INTAKE -----------------
+
+export async function submitJoinForm(entry: {
+  name: string;
+  email: string;
+  discipline: string;
+  portfolioOrGithub: string;
+  message: string;
+}): Promise<{ success: boolean; submissionId?: string; error?: string }> {
   try {
-    const current = getStoredSubmissions();
-    const updated = current.map((sub) => {
-      if (sub.id === id) {
-        return { ...sub, status, notes: notes !== undefined ? notes : sub.notes };
-      }
-      return sub;
+    const res = await fetch('/api/submissions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(entry),
     });
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-    window.dispatchEvent(new CustomEvent('acranix_submission_updated'));
+
+    const data = await res.json();
+
+    if (res.ok) {
+      // Also cache locally
+      const localItem: FormSubmission = {
+        id: data.submissionId || `sub_${Date.now()}`,
+        name: entry.name,
+        email: entry.email,
+        discipline: entry.discipline,
+        portfolioOrGithub: entry.portfolioOrGithub,
+        message: entry.message,
+        submittedAt: new Date().toISOString(),
+        isRead: false,
+        status: 'new',
+      };
+      const current = getLocalStoredSubmissions();
+      saveLocalSubmissions([localItem, ...current]);
+      window.dispatchEvent(new CustomEvent('acranix_submission_updated'));
+      return { success: true, submissionId: data.submissionId };
+    }
+
+    return { success: false, error: data.error || 'Failed to record application.' };
   } catch (err) {
-    console.error('Failed to update submission:', err);
+    console.error('Network error submitting join form:', err);
+    // Fallback to local storage
+    const fallbackItem: FormSubmission = {
+      id: `sub_${Date.now()}`,
+      name: entry.name,
+      email: entry.email,
+      discipline: entry.discipline,
+      portfolioOrGithub: entry.portfolioOrGithub,
+      message: entry.message,
+      submittedAt: new Date().toISOString(),
+      isRead: false,
+      status: 'new',
+    };
+    const current = getLocalStoredSubmissions();
+    saveLocalSubmissions([fallbackItem, ...current]);
+    window.dispatchEvent(new CustomEvent('acranix_submission_updated'));
+    return { success: true, submissionId: fallbackItem.id };
   }
 }
 
-export function deleteSubmission(id: string): void {
-  try {
-    const current = getStoredSubmissions();
-    const updated = current.filter((sub) => sub.id !== id);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-    window.dispatchEvent(new CustomEvent('acranix_submission_updated'));
-  } catch (err) {
-    console.error('Failed to delete submission:', err);
+// ----------------- ADMIN PROTECTED API CALLS -----------------
+
+export async function fetchAdminSubmissions(): Promise<{
+  submissions: FormSubmission[];
+  totalCount: number;
+  unreadCount: number;
+  error?: string;
+}> {
+  const token = getToken();
+  if (!token) {
+    return {
+      submissions: getLocalStoredSubmissions(),
+      totalCount: 0,
+      unreadCount: 0,
+      error: 'Admin authentication required',
+    };
   }
+
+  try {
+    const res = await fetch('/api/admin/submissions', {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json();
+      return {
+        submissions: [],
+        totalCount: 0,
+        unreadCount: 0,
+        error: errorData.error || 'Unauthorized to access admin inbox.',
+      };
+    }
+
+    const data = await res.json();
+    if (data.submissions) {
+      saveLocalSubmissions(data.submissions);
+    }
+    return {
+      submissions: data.submissions || [],
+      totalCount: data.totalCount || 0,
+      unreadCount: data.unreadCount || 0,
+    };
+  } catch (err) {
+    console.error('Network error fetching admin submissions:', err);
+    const local = getLocalStoredSubmissions();
+    return {
+      submissions: local,
+      totalCount: local.length,
+      unreadCount: local.filter((s) => !s.isRead).length,
+    };
+  }
+}
+
+export async function fetchAdminStats(): Promise<{
+  totalSubmissions: number;
+  unreadCount: number;
+  totalUsers: number;
+}> {
+  const token = getToken();
+  if (!token) return { totalSubmissions: 0, unreadCount: 0, totalUsers: 0 };
+
+  try {
+    const res = await fetch('/api/admin/stats', {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (err) {
+    console.error('Fetch stats error:', err);
+  }
+
+  const local = getLocalStoredSubmissions();
+  return {
+    totalSubmissions: local.length,
+    unreadCount: local.filter((s) => !s.isRead).length,
+    totalUsers: 2,
+  };
+}
+
+export async function updateAdminSubmission(
+  id: string,
+  updates: { isRead?: boolean; status?: FormSubmission['status']; notes?: string }
+): Promise<boolean> {
+  const token = getToken();
+  if (!token) return false;
+
+  try {
+    const res = await fetch(`/api/admin/submissions/${id}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(updates),
+    });
+
+    if (res.ok) {
+      window.dispatchEvent(new CustomEvent('acranix_submission_updated'));
+      return true;
+    }
+  } catch (err) {
+    console.error('Update submission network error:', err);
+  }
+
+  // Local fallback
+  const current = getLocalStoredSubmissions();
+  const updated = current.map((s) => {
+    if (s.id === id) {
+      return {
+        ...s,
+        isRead: updates.isRead !== undefined ? updates.isRead : s.isRead,
+        status: updates.status !== undefined ? updates.status : s.status,
+        notes: updates.notes !== undefined ? updates.notes : s.notes,
+      };
+    }
+    return s;
+  });
+  saveLocalSubmissions(updated);
+  window.dispatchEvent(new CustomEvent('acranix_submission_updated'));
+  return true;
+}
+
+export async function markAllSubmissionsAsRead(): Promise<boolean> {
+  const token = getToken();
+  if (!token) return false;
+
+  try {
+    const res = await fetch('/api/admin/submissions/mark-all-read', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (res.ok) {
+      window.dispatchEvent(new CustomEvent('acranix_submission_updated'));
+      return true;
+    }
+  } catch (err) {
+    console.error('Mark all read network error:', err);
+  }
+
+  const current = getLocalStoredSubmissions();
+  const updated = current.map((s) => ({ ...s, isRead: true }));
+  saveLocalSubmissions(updated);
+  window.dispatchEvent(new CustomEvent('acranix_submission_updated'));
+  return true;
+}
+
+export async function deleteAdminSubmission(id: string): Promise<boolean> {
+  const token = getToken();
+  if (!token) return false;
+
+  try {
+    const res = await fetch(`/api/admin/submissions/${id}`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (res.ok) {
+      window.dispatchEvent(new CustomEvent('acranix_submission_updated'));
+      return true;
+    }
+  } catch (err) {
+    console.error('Delete submission network error:', err);
+  }
+
+  const current = getLocalStoredSubmissions();
+  const updated = current.filter((s) => s.id !== id);
+  saveLocalSubmissions(updated);
+  window.dispatchEvent(new CustomEvent('acranix_submission_updated'));
+  return true;
 }
 
 export function exportSubmissionsToCSV(submissions: FormSubmission[]): void {
   if (submissions.length === 0) return;
-  const headers = ['ID', 'Date (UTC)', 'Name', 'Email', 'Discipline', 'Portfolio/GitHub', 'Message', 'Status'];
+  const headers = ['ID', 'Date (UTC)', 'Name', 'Email', 'Discipline', 'Portfolio/GitHub', 'Status', 'Read', 'Message'];
   const rows = submissions.map((s) => [
     s.id,
     new Date(s.submittedAt).toLocaleString(),
-    `"${s.name.replace(/"/g, '""')}"`,
-    `"${s.email.replace(/"/g, '""')}"`,
-    `"${s.discipline.replace(/"/g, '""')}"`,
+    `"${(s.name || '').replace(/"/g, '""')}"`,
+    `"${(s.email || '').replace(/"/g, '""')}"`,
+    `"${(s.discipline || '').replace(/"/g, '""')}"`,
     `"${(s.portfolioOrGithub || '').replace(/"/g, '""')}"`,
-    `"${(s.message || '').replace(/"/g, '""')}"`,
     s.status,
+    s.isRead ? 'Read' : 'Unread',
+    `"${(s.message || '').replace(/"/g, '""')}"`,
   ]);
 
   const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');

@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
-import { Sparkles, ArrowRight, CheckCircle2, Mail, Send, X, Terminal, Copy, Check } from 'lucide-react';
-import { saveSubmission } from '../lib/submissions';
+import { Sparkles, ArrowRight, CheckCircle2, Mail, Send, X, Terminal, Copy, Check, Loader2 } from 'lucide-react';
+import { submitJoinForm } from '../lib/submissions';
 
 interface JoinSectionProps {
   isOpen: boolean;
@@ -9,7 +9,7 @@ interface JoinSectionProps {
   onOpenAdminModal?: () => void;
 }
 
-export function JoinSection({ isOpen, onClose, onOpen, onOpenAdminModal }: JoinSectionProps) {
+export function JoinSection({ isOpen, onClose, onOpen }: JoinSectionProps) {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -17,34 +17,48 @@ export function JoinSection({ isOpen, onClose, onOpen, onOpenAdminModal }: JoinS
     portfolioOrGithub: '',
     message: '',
   });
+  const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [copiedEmail, setCopiedEmail] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    
-    // 1. Permanently store the submission so the founder can review it in the portal
-    saveSubmission({
-      name: formData.name,
-      email: formData.email,
-      discipline: formData.discipline,
-      portfolioOrGithub: formData.portfolioOrGithub,
-      message: formData.message,
-    });
+    setSubmitError(null);
+    setSubmitting(true);
 
-    // 2. Open pre-filled email client to dispatch to founder directly
-    const subject = encodeURIComponent(`[ACRANIX Builder Application] ${formData.discipline} - ${formData.name}`);
-    const body = encodeURIComponent(
-      `Name: ${formData.name}\nEmail: ${formData.email}\nDiscipline: ${formData.discipline}\nPortfolio/GitHub: ${formData.portfolioOrGithub}\n\nNote / What I want to build:\n${formData.message}\n\n---\nSent via ACRANIX Portal to akashyeginati@acranix.com`
-    );
-    
     try {
-      window.location.href = `mailto:akashyeginati@acranix.com?subject=${subject}&body=${body}`;
-    } catch {
-      // Ignore if mail client blocked by browser
-    }
+      // 1. Submit to backend API and local storage
+      const res = await submitJoinForm({
+        name: formData.name.trim(),
+        email: formData.email.trim(),
+        discipline: formData.discipline,
+        portfolioOrGithub: formData.portfolioOrGithub.trim(),
+        message: formData.message.trim(),
+      });
 
-    setSubmitted(true);
+      if (res.success) {
+        // 2. Open pre-filled email client to dispatch to founder directly
+        const subject = encodeURIComponent(`[ACRANIX Builder Application] ${formData.discipline} - ${formData.name}`);
+        const body = encodeURIComponent(
+          `Name: ${formData.name}\nEmail: ${formData.email}\nDiscipline: ${formData.discipline}\nPortfolio/GitHub: ${formData.portfolioOrGithub}\n\nNote / What I want to build:\n${formData.message}\n\n---\nSent via ACRANIX Portal to akashyeginati@acranix.com`
+        );
+        
+        try {
+          window.location.href = `mailto:akashyeginati@acranix.com?subject=${subject}&body=${body}`;
+        } catch {
+          // Ignore if mail client blocked by browser
+        }
+
+        setSubmitted(true);
+      } else {
+        setSubmitError(res.error || 'Failed to submit application. Please try again.');
+      }
+    } catch {
+      setSubmitError('An unexpected error occurred. Please try again or reach out via email.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleCopyFounderEmail = () => {
@@ -116,6 +130,7 @@ export function JoinSection({ isOpen, onClose, onOpen, onOpenAdminModal }: JoinS
             onClick={(e) => e.stopPropagation()}
           >
             <div className="absolute -top-1 -left-1 w-2 h-2 bg-white" />
+            <div className="absolute -bottom-1 -right-1 w-2 h-2 bg-white" />
 
             {/* Close Button */}
             <button
@@ -141,7 +156,7 @@ export function JoinSection({ isOpen, onClose, onOpen, onOpenAdminModal }: JoinS
                   </p>
                 </div>
 
-                {/* Direct email fallback card if email client didn't pop up */}
+                {/* Direct email fallback card */}
                 <div className="bg-[#020202] border border-[#222222] p-4 text-left space-y-2.5 max-w-md mx-auto">
                   <p className="text-[10px] font-mono uppercase tracking-widest text-[#888888]">
                     Direct Founder Contact Backup:
@@ -187,9 +202,17 @@ export function JoinSection({ isOpen, onClose, onOpen, onOpenAdminModal }: JoinS
                   </p>
                 </div>
 
+                {submitError && (
+                  <div className="p-3 bg-red-950/40 border border-red-800 text-red-300 text-xs font-mono">
+                    {submitError}
+                  </div>
+                )}
+
                 <div className="space-y-4 pt-2 text-xs">
                   <div>
-                    <label className="block text-[#aaaaaa] font-mono text-[10px] uppercase tracking-wider mb-1.5">Your Full Name</label>
+                    <label className="block text-[#aaaaaa] font-mono text-[10px] uppercase tracking-wider mb-1.5">
+                      Your Full Name <span className="text-white">*</span>
+                    </label>
                     <input
                       required
                       type="text"
@@ -201,7 +224,9 @@ export function JoinSection({ isOpen, onClose, onOpen, onOpenAdminModal }: JoinS
                   </div>
 
                   <div>
-                    <label className="block text-[#aaaaaa] font-mono text-[10px] uppercase tracking-wider mb-1.5">Email Address</label>
+                    <label className="block text-[#aaaaaa] font-mono text-[10px] uppercase tracking-wider mb-1.5">
+                      Email Address <span className="text-white">*</span>
+                    </label>
                     <input
                       required
                       type="email"
@@ -213,7 +238,9 @@ export function JoinSection({ isOpen, onClose, onOpen, onOpenAdminModal }: JoinS
                   </div>
 
                   <div>
-                    <label className="block text-[#aaaaaa] font-mono text-[10px] uppercase tracking-wider mb-1.5">Discipline / Role Focus</label>
+                    <label className="block text-[#aaaaaa] font-mono text-[10px] uppercase tracking-wider mb-1.5">
+                      Discipline / Role Focus
+                    </label>
                     <select
                       value={formData.discipline}
                       onChange={(e) => setFormData({ ...formData, discipline: e.target.value })}
@@ -228,7 +255,9 @@ export function JoinSection({ isOpen, onClose, onOpen, onOpenAdminModal }: JoinS
                   </div>
 
                   <div>
-                    <label className="block text-[#aaaaaa] font-mono text-[10px] uppercase tracking-wider mb-1.5">GitHub / Portfolio / Research Link</label>
+                    <label className="block text-[#aaaaaa] font-mono text-[10px] uppercase tracking-wider mb-1.5">
+                      GitHub / Portfolio / Research Link
+                    </label>
                     <input
                       type="text"
                       placeholder="https://github.com/..."
@@ -239,7 +268,9 @@ export function JoinSection({ isOpen, onClose, onOpen, onOpenAdminModal }: JoinS
                   </div>
 
                   <div>
-                    <label className="block text-[#aaaaaa] font-mono text-[10px] uppercase tracking-wider mb-1.5">What meaningful problem do you want to solve?</label>
+                    <label className="block text-[#aaaaaa] font-mono text-[10px] uppercase tracking-wider mb-1.5">
+                      What meaningful problem do you want to solve?
+                    </label>
                     <textarea
                       rows={3}
                       placeholder="Tell us what you are excited about building..."
@@ -252,10 +283,20 @@ export function JoinSection({ isOpen, onClose, onOpen, onOpenAdminModal }: JoinS
 
                 <button
                   type="submit"
-                  className="w-full py-3.5 border border-white bg-white text-black font-semibold text-[10px] uppercase tracking-widest hover:bg-transparent hover:text-white transition-colors flex items-center justify-center gap-2 mt-4"
+                  disabled={submitting}
+                  className="w-full py-3.5 border border-white bg-white text-black font-semibold text-[10px] uppercase tracking-widest hover:bg-transparent hover:text-white transition-colors flex items-center justify-center gap-2 mt-4 disabled:opacity-50"
                 >
-                  <Send className="w-3.5 h-3.5" />
-                  <span>Transmit Application</span>
+                  {submitting ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Recording Application...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-3.5 h-3.5" />
+                      <span>Transmit Application</span>
+                    </>
+                  )}
                 </button>
               </form>
             )}

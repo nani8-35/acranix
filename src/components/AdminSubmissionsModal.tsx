@@ -14,14 +14,20 @@ import {
   UserCheck,
   Copy,
   Check,
+  ShieldAlert,
+  Lock,
+  CheckCheck,
+  Loader2,
 } from 'lucide-react';
 import {
-  getStoredSubmissions,
-  updateSubmissionStatus,
-  deleteSubmission,
+  fetchAdminSubmissions,
+  updateAdminSubmission,
+  deleteAdminSubmission,
+  markAllSubmissionsAsRead,
   exportSubmissionsToCSV,
   type FormSubmission,
 } from '../lib/submissions';
+import { getCurrentUser } from '../lib/auth';
 
 interface AdminSubmissionsModalProps {
   isOpen: boolean;
@@ -34,13 +40,32 @@ export function AdminSubmissionsModal({ isOpen, onClose }: AdminSubmissionsModal
   const [filterStatus, setFilterStatus] = useState<'all' | FormSubmission['status']>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedEmail, setCopiedEmail] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
 
-  const loadSubmissions = () => {
-    const data = getStoredSubmissions();
-    setSubmissions(data);
-    if (selectedSubmission) {
-      const updatedSelected = data.find((s) => s.id === selectedSubmission.id);
-      setSelectedSubmission(updatedSelected || null);
+  const currentUser = getCurrentUser();
+  const isAdmin = currentUser?.role === 'ADMIN';
+
+  const loadSubmissions = async () => {
+    if (!isAdmin) {
+      setAuthError('Unauthorized. Administrator credentials required to access the Inbox.');
+      return;
+    }
+
+    setLoading(true);
+    setAuthError(null);
+
+    const result = await fetchAdminSubmissions();
+    setLoading(false);
+
+    if (result.error && !result.submissions.length) {
+      setAuthError(result.error);
+    } else {
+      setSubmissions(result.submissions);
+      if (selectedSubmission) {
+        const updated = result.submissions.find((s) => s.id === selectedSubmission.id);
+        setSelectedSubmission(updated || null);
+      }
     }
   };
 
@@ -51,12 +76,54 @@ export function AdminSubmissionsModal({ isOpen, onClose }: AdminSubmissionsModal
   }, [isOpen]);
 
   useEffect(() => {
-    const handleUpdate = () => loadSubmissions();
+    const handleUpdate = () => {
+      if (isOpen && isAdmin) {
+        loadSubmissions();
+      }
+    };
     window.addEventListener('acranix_submission_updated', handleUpdate);
     return () => window.removeEventListener('acranix_submission_updated', handleUpdate);
-  }, []);
+  }, [isOpen, isAdmin]);
 
   if (!isOpen) return null;
+
+  // Non-admin guard
+  if (!isAdmin) {
+    return (
+      <div
+        id="admin-submissions-modal-denied"
+        className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto"
+        onClick={onClose}
+      >
+        <div
+          className="bg-[#080808] border border-red-900/50 max-w-md w-full p-8 text-center space-y-5 relative shadow-2xl"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="w-12 h-12 border border-red-800 bg-red-950/30 text-red-400 flex items-center justify-center mx-auto">
+            <Lock className="w-6 h-6" />
+          </div>
+
+          <div className="space-y-2">
+            <h3 className="text-lg font-bold text-white uppercase tracking-wider">
+              Access Restricted
+            </h3>
+            <p className="text-xs text-[#aaaaaa] font-mono leading-relaxed">
+              The Inbox and applicant intake records are restricted to verified ACRANIX administrators
+              (<span className="text-white">akashyeginati@acranix.com</span>).
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full py-3 bg-white text-black text-xs font-mono uppercase font-bold tracking-widest hover:bg-[#e0e0e0] transition-colors"
+          >
+            Close Window
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const filtered = submissions.filter((sub) => {
     const matchesFilter = filterStatus === 'all' || sub.status === filterStatus;
@@ -74,17 +141,30 @@ export function AdminSubmissionsModal({ isOpen, onClose }: AdminSubmissionsModal
     setTimeout(() => setCopiedEmail(false), 2000);
   };
 
-  const handleStatusChange = (id: string, newStatus: FormSubmission['status']) => {
-    updateSubmissionStatus(id, newStatus);
+  const handleStatusChange = async (id: string, newStatus: FormSubmission['status']) => {
+    await updateAdminSubmission(id, { status: newStatus, isRead: true });
     loadSubmissions();
   };
 
-  const handleDelete = (id: string) => {
-    if (window.confirm('Are you sure you want to delete this submission?')) {
-      deleteSubmission(id);
+  const handleMarkAllRead = async () => {
+    await markAllSubmissionsAsRead();
+    loadSubmissions();
+  };
+
+  const handleDelete = async (id: string) => {
+    if (window.confirm('Are you sure you want to delete this applicant submission?')) {
+      await deleteAdminSubmission(id);
       if (selectedSubmission?.id === id) {
         setSelectedSubmission(null);
       }
+      loadSubmissions();
+    }
+  };
+
+  const handleSelectSubmission = async (sub: FormSubmission) => {
+    setSelectedSubmission(sub);
+    if (!sub.isRead) {
+      await updateAdminSubmission(sub.id, { isRead: true });
       loadSubmissions();
     }
   };
@@ -112,14 +192,17 @@ export function AdminSubmissionsModal({ isOpen, onClose }: AdminSubmissionsModal
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-base font-bold text-white tracking-wide">
-                  Builder Applications & Inquiries
+                  Admin Submissions Inbox
                 </h3>
                 <span className="px-2 py-0.5 text-[10px] font-mono bg-white text-black font-semibold uppercase">
                   {submissions.length} Total
                 </span>
+                <span className="px-2 py-0.5 text-[9px] font-mono bg-[#1a1a1a] border border-[#333333] text-[#aaaaaa]">
+                  Founder Access
+                </span>
               </div>
               <p className="text-[11px] font-mono text-[#888888] mt-0.5">
-                Admin Console — Direct applicant intake received via ACRANIX portal
+                Centralized applicant & inquiry intake for akashyeginati@acranix.com
               </p>
             </div>
           </div>
@@ -138,12 +221,23 @@ export function AdminSubmissionsModal({ isOpen, onClose }: AdminSubmissionsModal
             </button>
             <button
               type="button"
+              id="mark-all-read-btn"
+              onClick={handleMarkAllRead}
+              className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 border border-[#333333] hover:border-white text-[#aaaaaa] hover:text-white text-xs font-mono transition-colors"
+              title="Mark all as read"
+            >
+              <CheckCheck className="w-3.5 h-3.5" />
+              <span>Read All</span>
+            </button>
+            <button
+              type="button"
               id="refresh-submissions-btn"
               onClick={loadSubmissions}
+              disabled={loading}
               className="p-2 border border-[#333333] text-[#888888] hover:text-white hover:border-white transition-colors"
               title="Refresh submissions"
             >
-              <RefreshCw className="w-4 h-4" />
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
             <button
               type="button"
@@ -195,7 +289,12 @@ export function AdminSubmissionsModal({ isOpen, onClose }: AdminSubmissionsModal
         <div className="flex-1 grid grid-cols-1 md:grid-cols-12 overflow-hidden bg-[#030303]">
           {/* Left Column: Submissions List */}
           <div className="md:col-span-5 border-r border-[#222222] overflow-y-auto divide-y divide-[#181818]">
-            {filtered.length === 0 ? (
+            {loading && submissions.length === 0 ? (
+              <div className="p-10 text-center space-y-2">
+                <Loader2 className="w-6 h-6 text-white animate-spin mx-auto" />
+                <p className="text-xs font-mono text-[#888888]">Fetching intake submissions...</p>
+              </div>
+            ) : filtered.length === 0 ? (
               <div className="p-10 text-center space-y-3">
                 <Inbox className="w-8 h-8 text-[#444444] mx-auto" />
                 <p className="text-xs text-[#888888] font-mono uppercase tracking-wider">
@@ -213,7 +312,7 @@ export function AdminSubmissionsModal({ isOpen, onClose }: AdminSubmissionsModal
                 return (
                   <div
                     key={item.id}
-                    onClick={() => setSelectedSubmission(item)}
+                    onClick={() => handleSelectSubmission(item)}
                     className={`p-4 cursor-pointer transition-colors relative ${
                       isSelected
                         ? 'bg-[#111111] border-l-2 border-white'
@@ -222,9 +321,14 @@ export function AdminSubmissionsModal({ isOpen, onClose }: AdminSubmissionsModal
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="space-y-0.5">
-                        <p className="text-xs font-semibold text-white tracking-wide">
-                          {item.name}
-                        </p>
+                        <div className="flex items-center gap-1.5">
+                          {!item.isRead && (
+                            <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" title="Unread" />
+                          )}
+                          <p className="text-xs font-semibold text-white tracking-wide">
+                            {item.name}
+                          </p>
+                        </div>
                         <p className="text-[11px] font-mono text-[#888888]">
                           {item.email}
                         </p>

@@ -11,12 +11,17 @@ import { JourneyTimelineSection } from './components/JourneyTimelineSection';
 import { TeamSection } from './components/TeamSection';
 import { JoinSection } from './components/JoinSection';
 import { AdminSubmissionsModal } from './components/AdminSubmissionsModal';
+import { AuthModal } from './components/AuthModal';
+import { UserProfileModal } from './components/UserProfileModal';
 import { FinalExperienceSection } from './components/FinalExperienceSection';
 import { Footer } from './components/Footer';
+import { getCurrentUser } from './lib/auth';
 
 export default function App() {
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [activeSection, setActiveSection] = useState('hero');
   const [scrollProgress, setScrollProgress] = useState(0);
 
@@ -78,6 +83,8 @@ export default function App() {
       <Navigation
         onOpenJoinModal={() => setIsJoinModalOpen(true)}
         onOpenAdminModal={() => setIsAdminModalOpen(true)}
+        onOpenAuthModal={() => setIsAuthModalOpen(true)}
+        onOpenProfileModal={() => setIsProfileModalOpen(true)}
         activeSection={activeSection}
       />
 
@@ -123,6 +130,25 @@ export default function App() {
           onClose={() => setIsAdminModalOpen(false)}
         />
 
+        {/* OPERATOR AUTH MODAL (SIGN IN / SIGN UP) */}
+        <AuthModal
+          isOpen={isAuthModalOpen}
+          onClose={() => setIsAuthModalOpen(false)}
+          onSuccess={() => {
+            setIsAuthModalOpen(false);
+            setIsProfileModalOpen(true);
+          }}
+        />
+
+        {/* OPERATOR PROFILE & DAY-TO-DAY ACTIONS WORKSPACE */}
+        <UserProfileModal
+          isOpen={isProfileModalOpen}
+          onClose={() => setIsProfileModalOpen(false)}
+          onSignOut={() => {
+            setIsProfileModalOpen(false);
+          }}
+        />
+
         {/* FINAL EXPERIENCE (CALM RESOLUTION) */}
         <FinalExperienceSection />
       </main>
@@ -131,6 +157,14 @@ export default function App() {
       <Footer
         onOpenJoinModal={() => setIsJoinModalOpen(true)}
         onOpenAdminModal={() => setIsAdminModalOpen(true)}
+        onOpenAuthModal={() => setIsAuthModalOpen(true)}
+        onOpenProfileModal={() => {
+          if (getCurrentUser()) {
+            setIsProfileModalOpen(true);
+          } else {
+            setIsAuthModalOpen(true);
+          }
+        }}
       />
     </div>
   );

@@ -51,3 +51,43 @@ export interface TeamPillar {
   quote: string;
   status: string;
 }
+
+export type UserRole = 'USER' | 'ADMIN';
+
+export interface UserPreferences {
+  autoBriefing: boolean;
+  entropyAlerts: boolean;
+  soundFeedback: boolean;
+  compactDashboard: boolean;
+  emailDigest: boolean;
+}
+
+export interface UserProfile {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  createdAt: string;
+  roleTitle?: string;
+  organization?: string;
+  bio?: string;
+  timezone?: string;
+  primaryDiscipline?: string;
+  avatarColor?: string;
+  joinedAt?: string;
+  dailyGoal?: string;
+  preferences?: UserPreferences;
+}
+
+export interface DailyActionItem {
+  id: string;
+  userId: string;
+  title: string;
+  category: 'Understand' | 'Think' | 'Act' | 'Operations';
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  completed: boolean;
+  dueDate: string;
+  createdAt: string;
+  impactNotes?: string;
+}
+

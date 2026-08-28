@@ -1,26 +1,61 @@
 import { useState, useEffect, type MouseEvent } from 'react';
-import { Volume2, VolumeX, Menu, X, ArrowUpRight, Sparkles, Inbox } from 'lucide-react';
+import {
+  Volume2,
+  VolumeX,
+  Menu,
+  X,
+  ArrowUpRight,
+  Sparkles,
+  Inbox,
+  User,
+  LogIn,
+  LogOut,
+  ShieldCheck,
+} from 'lucide-react';
 import { ambientSound } from '../audio/ambientEngine';
 import { AcranixLogo } from './AcranixLogo';
 import { getStoredSubmissions } from '../lib/submissions';
+import { getCurrentUser, signOutUser } from '../lib/auth';
+import type { UserProfile } from '../types';
 
 interface NavigationProps {
   onOpenJoinModal: () => void;
   onOpenAdminModal?: () => void;
+  onOpenAuthModal?: () => void;
+  onOpenProfileModal?: () => void;
   activeSection: string;
 }
 
-export function Navigation({ onOpenJoinModal, onOpenAdminModal, activeSection }: NavigationProps) {
+export function Navigation({
+  onOpenJoinModal,
+  onOpenAdminModal,
+  onOpenAuthModal,
+  onOpenProfileModal,
+  activeSection,
+}: NavigationProps) {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isAudioActive, setIsAudioActive] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [scrollPercent, setScrollPercent] = useState(0);
   const [submissionCount, setSubmissionCount] = useState(0);
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+
+  useEffect(() => {
+    const updateAuth = () => {
+      setCurrentUser(getCurrentUser());
+    };
+    updateAuth();
+
+    window.addEventListener('acranix_auth_changed', updateAuth);
+    return () => window.removeEventListener('acranix_auth_changed', updateAuth);
+  }, []);
 
   useEffect(() => {
     const updateCount = () => {
       const subs = getStoredSubmissions();
-      setSubmissionCount(subs.length);
+      // Count unread submissions
+      const unread = subs.filter((s) => s.status !== 'archived').length;
+      setSubmissionCount(unread);
     };
     updateCount();
 
@@ -50,6 +85,11 @@ export function Navigation({ onOpenJoinModal, onOpenAdminModal, activeSection }:
     }
   };
 
+  const handleLogout = () => {
+    signOutUser();
+    setCurrentUser(null);
+  };
+
   const navLinks = [
     { label: 'Vision', href: '#vision', id: 'vision' },
     { label: 'Philosophy', href: '#philosophy', id: 'philosophy' },
@@ -66,6 +106,8 @@ export function Navigation({ onOpenJoinModal, onOpenAdminModal, activeSection }:
       element.scrollIntoView({ behavior: 'smooth' });
     }
   };
+
+  const isAdmin = currentUser?.role === 'ADMIN';
 
   return (
     <>
@@ -96,7 +138,10 @@ export function Navigation({ onOpenJoinModal, onOpenAdminModal, activeSection }:
           </a>
 
           {/* Desktop Navigation Links */}
-          <nav id="desktop-nav-menu" className="hidden md:flex items-center gap-8 lg:gap-12 text-[11px] uppercase tracking-[0.3em] font-medium text-[#888888]">
+          <nav
+            id="desktop-nav-menu"
+            className="hidden md:flex items-center gap-8 lg:gap-12 text-[11px] uppercase tracking-[0.3em] font-medium text-[#888888]"
+          >
             {navLinks.map((link) => {
               const isActive = activeSection === link.id;
               return (
@@ -116,26 +161,7 @@ export function Navigation({ onOpenJoinModal, onOpenAdminModal, activeSection }:
           </nav>
 
           {/* Right Action Controls */}
-          <div className="flex items-center gap-3 sm:gap-4">
-            {/* Submissions Inbox Button */}
-            {onOpenAdminModal && (
-              <button
-                id="nav-submissions-inbox-btn"
-                type="button"
-                onClick={onOpenAdminModal}
-                title="View Builder Applications & Inquiries"
-                className="flex items-center gap-1.5 px-3 py-2 text-[10px] font-mono uppercase tracking-wider border border-[#333333] hover:border-white text-[#aaaaaa] hover:text-white transition-all duration-300"
-              >
-                <Inbox className="w-3.5 h-3.5" />
-                <span className="hidden lg:inline">Inbox</span>
-                {submissionCount > 0 && (
-                  <span className="px-1.5 py-0.2 bg-white text-black font-bold text-[9px] font-mono ml-0.5">
-                    {submissionCount}
-                  </span>
-                )}
-              </button>
-            )}
-
+          <div className="flex items-center gap-2.5 sm:gap-3">
             {/* Audio Ambiance Synthesizer Toggle */}
             <button
               id="ambient-sound-toggle-btn"
@@ -144,7 +170,7 @@ export function Navigation({ onOpenJoinModal, onOpenAdminModal, activeSection }:
               aria-label={isAudioActive ? 'Mute ambient soundscape' : 'Enable ambient soundscape'}
               className={`hidden sm:flex items-center gap-2 px-3 py-2 text-[10px] font-mono uppercase tracking-[0.2em] border transition-all duration-300 ${
                 isAudioActive
-                  ? 'border-white bg-white text-black'
+                  ? 'border-white bg-white text-black font-bold'
                   : 'border-[#333333] text-[#888888] hover:text-white hover:border-[#555555]'
               }`}
             >
@@ -161,12 +187,77 @@ export function Navigation({ onOpenJoinModal, onOpenAdminModal, activeSection }:
               )}
             </button>
 
-            {/* Primary Action Button - Elegant Dark Styled */}
+            {/* 1. ADMIN-ONLY: Admin Submissions Inbox Button with Notification Badge */}
+            {currentUser && isAdmin && onOpenAdminModal && (
+              <button
+                id="nav-submissions-inbox-btn"
+                type="button"
+                onClick={onOpenAdminModal}
+                title="Admin Inbox — Review Submissions"
+                className="flex items-center gap-1.5 px-3 py-2 text-[10px] font-mono uppercase tracking-wider border border-white/40 bg-[#0d0d0d] hover:border-white text-white transition-all duration-300"
+              >
+                <Inbox className="w-3.5 h-3.5 text-white" />
+                <span>Inbox</span>
+                {submissionCount > 0 && (
+                  <span
+                    id="admin-inbox-badge"
+                    className="flex items-center gap-1 px-1.5 py-0.2 bg-white text-black font-bold text-[9px] font-mono ml-0.5"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-600 inline-block animate-pulse" />
+                    {submissionCount}
+                  </span>
+                )}
+              </button>
+            )}
+
+            {/* 2. AUTHENTICATED USER (USER OR ADMIN): Profile & Logout */}
+            {currentUser ? (
+              <div className="flex items-center gap-2">
+                <button
+                  id="nav-user-profile-btn"
+                  type="button"
+                  onClick={onOpenProfileModal}
+                  title="View Profile & Settings"
+                  className="flex items-center gap-2 px-3 py-1.5 border border-[#333333] bg-[#0c0c0c] hover:border-white text-white transition-all"
+                >
+                  <div className="w-5 h-5 bg-white text-black font-bold text-[10px] flex items-center justify-center font-mono">
+                    {currentUser.name ? currentUser.name.charAt(0).toUpperCase() : 'A'}
+                  </div>
+                  <span className="text-[11px] font-semibold tracking-wide text-white">
+                    {currentUser.name || 'Akash'}
+                  </span>
+                </button>
+
+                <button
+                  id="nav-logout-btn"
+                  type="button"
+                  onClick={handleLogout}
+                  title="Sign Out"
+                  className="hidden sm:flex items-center gap-1.5 px-2.5 py-2 text-[10px] font-mono uppercase tracking-wider border border-[#333333] hover:border-red-500 text-[#888888] hover:text-red-400 transition-all"
+                >
+                  <LogOut className="w-3 h-3" />
+                  <span className="hidden md:inline">Logout</span>
+                </button>
+              </div>
+            ) : (
+              /* 3. GUEST USER: Sign In + Join Us */
+              <button
+                id="nav-signin-btn"
+                type="button"
+                onClick={onOpenAuthModal}
+                className="flex items-center gap-1.5 px-3 py-2 text-[10px] font-mono uppercase tracking-wider border border-[#333333] hover:border-white text-[#cccccc] hover:text-white transition-all"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>Sign In</span>
+              </button>
+            )}
+
+            {/* Primary Action Button: Join Us */}
             <button
               id="nav-join-button"
               type="button"
               onClick={onOpenJoinModal}
-              className="border border-[#333333] px-6 sm:px-8 py-2.5 sm:py-3 text-[10px] uppercase tracking-[0.2em] text-[#e0e0e0] hover:bg-white hover:text-black transition-all duration-500"
+              className="border border-[#333333] px-4 sm:px-6 py-2 text-[10px] uppercase tracking-[0.2em] text-[#e0e0e0] hover:bg-white hover:text-black transition-all duration-300"
             >
               Join Us
             </button>
@@ -176,7 +267,7 @@ export function Navigation({ onOpenJoinModal, onOpenAdminModal, activeSection }:
               id="mobile-menu-toggle-btn"
               type="button"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden p-2.5 border border-[#333333] text-[#888888] hover:text-white"
+              className="md:hidden p-2 border border-[#333333] text-[#888888] hover:text-white"
               aria-label="Toggle Navigation Menu"
             >
               {mobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
@@ -220,20 +311,66 @@ export function Navigation({ onOpenJoinModal, onOpenAdminModal, activeSection }:
           </div>
 
           <div className="flex flex-col gap-3 pt-6 border-t border-[#222222]">
-            {onOpenAdminModal && (
+            {currentUser ? (
+              <>
+                <button
+                  id="mobile-user-profile-btn"
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    if (onOpenProfileModal) onOpenProfileModal();
+                  }}
+                  className="w-full py-3 bg-[#111111] border border-white/50 text-white hover:border-white flex items-center justify-center gap-2.5 text-xs font-mono uppercase tracking-widest transition-colors"
+                >
+                  <div className="w-5 h-5 bg-white text-black font-bold text-[10px] flex items-center justify-center font-mono">
+                    {currentUser.name ? currentUser.name.charAt(0).toUpperCase() : 'A'}
+                  </div>
+                  <span>Profile: {currentUser.name || 'Akash'}</span>
+                </button>
+
+                {isAdmin && onOpenAdminModal && (
+                  <button
+                    id="mobile-submissions-inbox-btn"
+                    type="button"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      onOpenAdminModal();
+                    }}
+                    className="w-full py-2.5 border border-white/40 bg-[#0c0c0c] text-white flex items-center justify-center gap-2 text-xs font-mono uppercase tracking-widest transition-colors"
+                  >
+                    <Inbox className="w-4 h-4" />
+                    <span>Admin Inbox {submissionCount > 0 ? `(${submissionCount})` : ''}</span>
+                  </button>
+                )}
+
+                <button
+                  id="mobile-logout-btn"
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    handleLogout();
+                  }}
+                  className="w-full py-2.5 border border-[#333333] hover:border-red-500 text-[#888888] hover:text-red-400 flex items-center justify-center gap-2 text-xs font-mono uppercase tracking-widest transition-colors"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Logout</span>
+                </button>
+              </>
+            ) : (
               <button
-                id="mobile-submissions-inbox-btn"
+                id="mobile-signin-btn"
                 type="button"
                 onClick={() => {
                   setMobileMenuOpen(false);
-                  onOpenAdminModal();
+                  if (onOpenAuthModal) onOpenAuthModal();
                 }}
-                className="w-full py-2.5 border border-[#333333] text-[#aaaaaa] hover:text-white hover:border-white flex items-center justify-center gap-2 text-xs font-mono uppercase tracking-widest transition-colors"
+                className="w-full py-2.5 border border-[#333333] text-[#cccccc] hover:text-white hover:border-white flex items-center justify-center gap-2 text-xs font-mono uppercase tracking-widest transition-colors"
               >
-                <Inbox className="w-4 h-4" />
-                <span>Applications Inbox {submissionCount > 0 ? `(${submissionCount})` : ''}</span>
+                <LogIn className="w-4 h-4" />
+                <span>Sign In / Create Account</span>
               </button>
             )}
+
             <button
               id="mobile-sound-toggle-btn"
               type="button"
@@ -243,6 +380,7 @@ export function Navigation({ onOpenJoinModal, onOpenAdminModal, activeSection }:
               {isAudioActive ? <Volume2 className="w-4 h-4 text-white" /> : <VolumeX className="w-4 h-4" />}
               <span>{isAudioActive ? 'Ambient Sound: ON' : 'Ambient Sound: OFF'}</span>
             </button>
+
             <button
               id="mobile-join-cta-btn"
               type="button"
@@ -255,9 +393,6 @@ export function Navigation({ onOpenJoinModal, onOpenAdminModal, activeSection }:
               <Sparkles className="w-3.5 h-3.5" />
               <span>Join ACRANIX</span>
             </button>
-            <p className="text-center text-[10px] text-[#555555] font-mono tracking-wider">
-              contact: akashyeginati@acranix.com
-            </p>
           </div>
         </div>
       )}

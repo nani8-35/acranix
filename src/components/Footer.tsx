@@ -4,9 +4,16 @@ import { AcranixLogo } from './AcranixLogo';
 interface FooterProps {
   onOpenJoinModal: () => void;
   onOpenAdminModal?: () => void;
+  onOpenAuthModal?: () => void;
+  onOpenProfileModal?: () => void;
 }
 
-export function Footer({ onOpenJoinModal, onOpenAdminModal }: FooterProps) {
+export function Footer({
+  onOpenJoinModal,
+  onOpenAdminModal,
+  onOpenAuthModal,
+  onOpenProfileModal,
+}: FooterProps) {
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -87,6 +94,28 @@ export function Footer({ onOpenJoinModal, onOpenAdminModal }: FooterProps) {
                     className="text-[#aaaaaa] hover:text-white transition-colors text-left font-mono inline-flex items-center gap-1"
                   >
                     <span>Submissions Inbox</span>
+                  </button>
+                </li>
+              )}
+              {onOpenProfileModal && (
+                <li>
+                  <button
+                    type="button"
+                    onClick={onOpenProfileModal}
+                    className="text-[#cccccc] hover:text-white transition-colors text-left font-mono inline-flex items-center gap-1"
+                  >
+                    <span>Profile & Daily Actions</span>
+                  </button>
+                </li>
+              )}
+              {onOpenAuthModal && (
+                <li>
+                  <button
+                    type="button"
+                    onClick={onOpenAuthModal}
+                    className="text-[#888888] hover:text-white transition-colors text-left font-mono inline-flex items-center gap-1"
+                  >
+                    <span>Operator Sign In</span>
                   </button>
                 </li>
               )}
