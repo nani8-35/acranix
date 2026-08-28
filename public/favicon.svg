@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none">
+  <rect width="120" height="120" rx="24" fill="#000000"/>
+  <!-- Outer Arc -->
+  <path d="M 112 60 A 52 52 0 0 0 62 8" stroke="#F5F2EB" stroke-width="7" stroke-linecap="butt"/>
+  <path d="M 58 8 A 52 52 0 0 0 8 60" stroke="#F5F2EB" stroke-width="7" stroke-linecap="butt"/>
+  <path d="M 8 64 A 52 52 0 0 0 28 102" stroke="#F5F2EB" stroke-width="4.5" stroke-linecap="butt"/>
+  <path d="M 28 102 A 52 52 0 0 0 46 111" stroke="#F5F2EB" stroke-width="2.5" stroke-linecap="round"/>
+
+  <!-- Middle Arc -->
+  <path d="M 100 60 A 40 40 0 0 0 62 20" stroke="#F5F2EB" stroke-width="7" stroke-linecap="butt"/>
+  <path d="M 58 20 A 40 40 0 0 0 20 60" stroke="#F5F2EB" stroke-width="7" stroke-linecap="butt"/>
+  <path d="M 20 64 A 40 40 0 0 0 35 92" stroke="#F5F2EB" stroke-width="4" stroke-linecap="butt"/>
+  <path d="M 35 92 A 40 40 0 0 0 48 99" stroke="#F5F2EB" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- Inner Arc -->
+  <path d="M 88 60 A 28 28 0 0 0 62 32" stroke="#F5F2EB" stroke-width="7" stroke-linecap="butt"/>
+  <path d="M 58 32 A 28 28 0 0 0 32 60" stroke="#F5F2EB" stroke-width="7" stroke-linecap="butt"/>
+  <path d="M 32 64 A 28 28 0 0 0 44 83" stroke="#F5F2EB" stroke-width="3" stroke-linecap="butt"/>
+  <path d="M 44 83 A 28 28 0 0 0 52 87" stroke="#F5F2EB" stroke-width="1.5" stroke-linecap="round"/>
+</svg>
