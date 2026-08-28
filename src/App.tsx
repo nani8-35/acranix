@@ -10,11 +10,13 @@ import { VisionSection } from './components/VisionSection';
 import { JourneyTimelineSection } from './components/JourneyTimelineSection';
 import { TeamSection } from './components/TeamSection';
 import { JoinSection } from './components/JoinSection';
+import { AdminSubmissionsModal } from './components/AdminSubmissionsModal';
 import { FinalExperienceSection } from './components/FinalExperienceSection';
 import { Footer } from './components/Footer';
 
 export default function App() {
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
+  const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
   const [activeSection, setActiveSection] = useState('hero');
   const [scrollProgress, setScrollProgress] = useState(0);
 
@@ -75,6 +77,7 @@ export default function App() {
       {/* Primary Fixed Navigation */}
       <Navigation
         onOpenJoinModal={() => setIsJoinModalOpen(true)}
+        onOpenAdminModal={() => setIsAdminModalOpen(true)}
         activeSection={activeSection}
       />
 
@@ -111,6 +114,13 @@ export default function App() {
           isOpen={isJoinModalOpen}
           onClose={() => setIsJoinModalOpen(false)}
           onOpen={() => setIsJoinModalOpen(true)}
+          onOpenAdminModal={() => setIsAdminModalOpen(true)}
+        />
+
+        {/* ADMIN SUBMISSIONS INBOX MODAL */}
+        <AdminSubmissionsModal
+          isOpen={isAdminModalOpen}
+          onClose={() => setIsAdminModalOpen(false)}
         />
 
         {/* FINAL EXPERIENCE (CALM RESOLUTION) */}
@@ -118,7 +128,10 @@ export default function App() {
       </main>
 
       {/* FOOTER (SEAMLESS GRADUAL DESCENT) */}
-      <Footer onOpenJoinModal={() => setIsJoinModalOpen(true)} />
+      <Footer
+        onOpenJoinModal={() => setIsJoinModalOpen(true)}
+        onOpenAdminModal={() => setIsAdminModalOpen(true)}
+      />
     </div>
   );
 }

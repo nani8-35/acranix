@@ -1,13 +1,15 @@
 import { useState, type FormEvent } from 'react';
-import { Sparkles, ArrowRight, CheckCircle2, Mail, Send, X, Terminal } from 'lucide-react';
+import { Sparkles, ArrowRight, CheckCircle2, Mail, Send, X, Terminal, Copy, Check } from 'lucide-react';
+import { saveSubmission } from '../lib/submissions';
 
 interface JoinSectionProps {
   isOpen: boolean;
   onClose: () => void;
   onOpen: () => void;
+  onOpenAdminModal?: () => void;
 }
 
-export function JoinSection({ isOpen, onClose, onOpen }: JoinSectionProps) {
+export function JoinSection({ isOpen, onClose, onOpen, onOpenAdminModal }: JoinSectionProps) {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -16,16 +18,39 @@ export function JoinSection({ isOpen, onClose, onOpen }: JoinSectionProps) {
     message: '',
   });
   const [submitted, setSubmitted] = useState(false);
+  const [copiedEmail, setCopiedEmail] = useState(false);
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    // Construct pre-filled email to founder
+    
+    // 1. Permanently store the submission so the founder can review it in the portal
+    saveSubmission({
+      name: formData.name,
+      email: formData.email,
+      discipline: formData.discipline,
+      portfolioOrGithub: formData.portfolioOrGithub,
+      message: formData.message,
+    });
+
+    // 2. Open pre-filled email client to dispatch to founder directly
     const subject = encodeURIComponent(`[ACRANIX Builder Application] ${formData.discipline} - ${formData.name}`);
     const body = encodeURIComponent(
       `Name: ${formData.name}\nEmail: ${formData.email}\nDiscipline: ${formData.discipline}\nPortfolio/GitHub: ${formData.portfolioOrGithub}\n\nNote / What I want to build:\n${formData.message}\n\n---\nSent via ACRANIX Portal to akashyeginati@acranix.com`
     );
-    window.location.href = `mailto:akashyeginati@acranix.com?subject=${subject}&body=${body}`;
+    
+    try {
+      window.location.href = `mailto:akashyeginati@acranix.com?subject=${subject}&body=${body}`;
+    } catch {
+      // Ignore if mail client blocked by browser
+    }
+
     setSubmitted(true);
+  };
+
+  const handleCopyFounderEmail = () => {
+    navigator.clipboard.writeText('akashyeginati@acranix.com');
+    setCopiedEmail(true);
+    setTimeout(() => setCopiedEmail(false), 2500);
   };
 
   return (
@@ -104,25 +129,48 @@ export function JoinSection({ isOpen, onClose, onOpen }: JoinSectionProps) {
             </button>
 
             {submitted ? (
-              <div className="text-center py-10 space-y-4">
+              <div className="text-center py-8 space-y-5">
                 <div className="w-12 h-12 border border-white flex items-center justify-center mx-auto text-white">
                   <CheckCircle2 className="w-6 h-6" />
                 </div>
-                <h3 className="text-2xl font-bold text-white">Transmission Ready</h3>
-                <p className="text-xs sm:text-sm text-[#aaaaaa] max-w-md mx-auto font-light">
-                  Your mail client has been opened to dispatch your application directly to{' '}
-                  <span className="font-mono text-white">akashyeginati@acranix.com</span>.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSubmitted(false);
-                    onClose();
-                  }}
-                  className="px-6 py-2.5 bg-white text-black font-semibold text-[10px] uppercase tracking-widest mt-4 hover:bg-[#e0e0e0] transition-colors"
-                >
-                  Close Window
-                </button>
+                <div className="space-y-1.5">
+                  <h3 className="text-2xl font-bold text-white">Application Recorded & Dispatched</h3>
+                  <p className="text-xs sm:text-sm text-[#aaaaaa] max-w-md mx-auto font-light leading-relaxed">
+                    Your application has been stored in the ACRANIX intake system and forwarded to founder{' '}
+                    <span className="font-mono text-white">akashyeginati@acranix.com</span>.
+                  </p>
+                </div>
+
+                {/* Direct email fallback card if email client didn't pop up */}
+                <div className="bg-[#020202] border border-[#222222] p-4 text-left space-y-2.5 max-w-md mx-auto">
+                  <p className="text-[10px] font-mono uppercase tracking-widest text-[#888888]">
+                    Direct Founder Contact Backup:
+                  </p>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-mono text-white">akashyeginati@acranix.com</span>
+                    <button
+                      type="button"
+                      onClick={handleCopyFounderEmail}
+                      className="px-2.5 py-1 text-[10px] font-mono uppercase bg-[#141414] border border-[#333333] hover:border-white text-white transition-colors flex items-center gap-1.5"
+                    >
+                      {copiedEmail ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                      <span>{copiedEmail ? 'Copied' : 'Copy Email'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-center gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSubmitted(false);
+                      onClose();
+                    }}
+                    className="px-6 py-2.5 bg-white text-black font-semibold text-[10px] uppercase tracking-widest hover:bg-[#e0e0e0] transition-colors"
+                  >
+                    Close Window
+                  </button>
+                </div>
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-5">

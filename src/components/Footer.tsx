@@ -3,9 +3,10 @@ import { AcranixLogo } from './AcranixLogo';
 
 interface FooterProps {
   onOpenJoinModal: () => void;
+  onOpenAdminModal?: () => void;
 }
 
-export function Footer({ onOpenJoinModal }: FooterProps) {
+export function Footer({ onOpenJoinModal, onOpenAdminModal }: FooterProps) {
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -78,6 +79,17 @@ export function Footer({ onOpenJoinModal }: FooterProps) {
                   Contact
                 </a>
               </li>
+              {onOpenAdminModal && (
+                <li>
+                  <button
+                    type="button"
+                    onClick={onOpenAdminModal}
+                    className="text-[#aaaaaa] hover:text-white transition-colors text-left font-mono inline-flex items-center gap-1"
+                  >
+                    <span>Submissions Inbox</span>
+                  </button>
+                </li>
+              )}
             </ul>
           </div>
 

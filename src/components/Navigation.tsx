@@ -1,18 +1,32 @@
 import { useState, useEffect, type MouseEvent } from 'react';
-import { Volume2, VolumeX, Menu, X, ArrowUpRight, Sparkles } from 'lucide-react';
+import { Volume2, VolumeX, Menu, X, ArrowUpRight, Sparkles, Inbox } from 'lucide-react';
 import { ambientSound } from '../audio/ambientEngine';
 import { AcranixLogo } from './AcranixLogo';
+import { getStoredSubmissions } from '../lib/submissions';
 
 interface NavigationProps {
   onOpenJoinModal: () => void;
+  onOpenAdminModal?: () => void;
   activeSection: string;
 }
 
-export function Navigation({ onOpenJoinModal, activeSection }: NavigationProps) {
+export function Navigation({ onOpenJoinModal, onOpenAdminModal, activeSection }: NavigationProps) {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isAudioActive, setIsAudioActive] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [scrollPercent, setScrollPercent] = useState(0);
+  const [submissionCount, setSubmissionCount] = useState(0);
+
+  useEffect(() => {
+    const updateCount = () => {
+      const subs = getStoredSubmissions();
+      setSubmissionCount(subs.length);
+    };
+    updateCount();
+
+    window.addEventListener('acranix_submission_updated', updateCount);
+    return () => window.removeEventListener('acranix_submission_updated', updateCount);
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -102,7 +116,26 @@ export function Navigation({ onOpenJoinModal, activeSection }: NavigationProps) 
           </nav>
 
           {/* Right Action Controls */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
+            {/* Submissions Inbox Button */}
+            {onOpenAdminModal && (
+              <button
+                id="nav-submissions-inbox-btn"
+                type="button"
+                onClick={onOpenAdminModal}
+                title="View Builder Applications & Inquiries"
+                className="flex items-center gap-1.5 px-3 py-2 text-[10px] font-mono uppercase tracking-wider border border-[#333333] hover:border-white text-[#aaaaaa] hover:text-white transition-all duration-300"
+              >
+                <Inbox className="w-3.5 h-3.5" />
+                <span className="hidden lg:inline">Inbox</span>
+                {submissionCount > 0 && (
+                  <span className="px-1.5 py-0.2 bg-white text-black font-bold text-[9px] font-mono ml-0.5">
+                    {submissionCount}
+                  </span>
+                )}
+              </button>
+            )}
+
             {/* Audio Ambiance Synthesizer Toggle */}
             <button
               id="ambient-sound-toggle-btn"
@@ -186,12 +219,26 @@ export function Navigation({ onOpenJoinModal, activeSection }: NavigationProps) 
             ))}
           </div>
 
-          <div className="flex flex-col gap-4 pt-6 border-t border-[#222222]">
+          <div className="flex flex-col gap-3 pt-6 border-t border-[#222222]">
+            {onOpenAdminModal && (
+              <button
+                id="mobile-submissions-inbox-btn"
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  onOpenAdminModal();
+                }}
+                className="w-full py-2.5 border border-[#333333] text-[#aaaaaa] hover:text-white hover:border-white flex items-center justify-center gap-2 text-xs font-mono uppercase tracking-widest transition-colors"
+              >
+                <Inbox className="w-4 h-4" />
+                <span>Applications Inbox {submissionCount > 0 ? `(${submissionCount})` : ''}</span>
+              </button>
+            )}
             <button
               id="mobile-sound-toggle-btn"
               type="button"
               onClick={handleToggleAudio}
-              className="w-full py-3 border border-[#333333] text-[#888888] flex items-center justify-center gap-2 text-xs font-mono uppercase tracking-widest"
+              className="w-full py-2.5 border border-[#333333] text-[#888888] flex items-center justify-center gap-2 text-xs font-mono uppercase tracking-widest"
             >
               {isAudioActive ? <Volume2 className="w-4 h-4 text-white" /> : <VolumeX className="w-4 h-4" />}
               <span>{isAudioActive ? 'Ambient Sound: ON' : 'Ambient Sound: OFF'}</span>
