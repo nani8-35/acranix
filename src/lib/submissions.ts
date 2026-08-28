@@ -302,3 +302,60 @@ export function exportSubmissionsToCSV(submissions: FormSubmission[]): void {
   link.click();
   document.body.removeChild(link);
 }
+
+// ----------------- RENDER BACKEND INTEGRATION & SYNC -----------------
+
+export interface BackendSyncInfo {
+  remoteBackendUrl: string;
+  status: 'connected' | 'offline_or_waking';
+  details?: {
+    isOnline: boolean;
+    latencyMs?: number;
+    lastChecked?: string;
+    statusCode?: number;
+    error?: string;
+  };
+  localMetrics?: {
+    totalUsers: number;
+    totalSubmissions: number;
+  };
+}
+
+export async function fetchBackendSyncStatus(): Promise<BackendSyncInfo | null> {
+  try {
+    const res = await fetch('/api/backend-sync/status');
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (err) {
+    console.error('Failed to fetch backend sync status:', err);
+  }
+  return {
+    remoteBackendUrl: 'https://acranix.onrender.com',
+    status: 'offline_or_waking',
+    details: {
+      isOnline: false,
+      error: 'Connecting to bridge...',
+    },
+  };
+}
+
+export async function triggerRemoteBackendSync(): Promise<{ success: boolean; message: string }> {
+  const token = getToken();
+  try {
+    const res = await fetch('/api/backend-sync/sync-submissions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token || ''}`,
+      },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      window.dispatchEvent(new CustomEvent('acranix_submission_updated'));
+      return { success: true, message: data.message || 'Sync successful.' };
+    }
+    return { success: false, message: 'Remote sync failed.' };
+  } catch (err) {
+    return { success: false, message: 'Network error during synchronization.' };
+  }
+}
