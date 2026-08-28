@@ -1,4 +1,5 @@
 import express, { Request, Response, NextFunction } from 'express';
+import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
@@ -6,9 +7,8 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { createServer as createViteServer } from 'vite';
 
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'acranix_super_secret_jwt_key_2026';
-const REMOTE_BACKEND_URL = (process.env.REMOTE_BACKEND_URL || 'https://acranix.onrender.com').replace(/\/+$/, '');
 const DATA_DIR = path.join(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
 
@@ -44,107 +44,6 @@ export interface JoinSubmissionRecord {
   isRead: boolean;
   status: 'new' | 'reviewed' | 'contacted' | 'archived';
   notes?: string;
-}
-
-export interface RemoteBackendStatus {
-  url: string;
-  isOnline: boolean;
-  statusCode?: number;
-  lastChecked: string;
-  latencyMs?: number;
-  error?: string;
-}
-
-let cachedRemoteStatus: RemoteBackendStatus = {
-  url: REMOTE_BACKEND_URL,
-  isOnline: false,
-  lastChecked: new Date().toISOString(),
-};
-
-async function pingRemoteBackend(): Promise<RemoteBackendStatus> {
-  const start = Date.now();
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 6000);
-
-    let res: globalThis.Response | null = null;
-
-    // Probe standard health or root routes
-    try {
-      res = await fetch(`${REMOTE_BACKEND_URL}/api/health`, {
-        signal: controller.signal,
-        headers: { 'User-Agent': 'ACRANIX-Bridge/1.0' },
-      });
-    } catch {
-      // Try fallback root
-    }
-
-    if (!res || !res.ok) {
-      try {
-        res = await fetch(`${REMOTE_BACKEND_URL}/`, {
-          signal: controller.signal,
-          headers: { 'User-Agent': 'ACRANIX-Bridge/1.0' },
-        });
-      } catch {
-        // failed
-      }
-    }
-
-    clearTimeout(timeoutId);
-    const latency = Date.now() - start;
-
-    if (res && res.status < 500) {
-      cachedRemoteStatus = {
-        url: REMOTE_BACKEND_URL,
-        isOnline: true,
-        statusCode: res.status,
-        lastChecked: new Date().toISOString(),
-        latencyMs: latency,
-      };
-    } else {
-      cachedRemoteStatus = {
-        url: REMOTE_BACKEND_URL,
-        isOnline: false,
-        statusCode: res?.status,
-        lastChecked: new Date().toISOString(),
-        latencyMs: latency,
-        error: res ? `Remote returned HTTP ${res.status}` : 'No response from remote server',
-      };
-    }
-  } catch (err: any) {
-    cachedRemoteStatus = {
-      url: REMOTE_BACKEND_URL,
-      isOnline: false,
-      lastChecked: new Date().toISOString(),
-      latencyMs: Date.now() - start,
-      error: err?.name === 'AbortError' ? 'Instance waking up or timeout' : (err?.message || 'Connection failed'),
-    };
-  }
-  return cachedRemoteStatus;
-}
-
-// Background sync helper
-async function syncWithRemoteBackend(endpoint: string, options: { method?: string; body?: any; headers?: Record<string, string> } = {}) {
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
-    const res = await fetch(`${REMOTE_BACKEND_URL}${endpoint}`, {
-      method: options.method || 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(options.headers || {}),
-      },
-      body: options.body ? JSON.stringify(options.body) : undefined,
-      signal: controller.signal,
-    });
-    clearTimeout(timeoutId);
-    if (res.ok) {
-      return await res.json().catch(() => ({ success: true }));
-    }
-  } catch (err) {
-    console.warn(`[ACRANIX Remote Sync] Sync to ${REMOTE_BACKEND_URL}${endpoint} deferred:`, err);
-  }
-  return null;
 }
 
 interface DatabaseSchema {
@@ -310,97 +209,55 @@ function requireAdmin(req: AuthRequest, res: Response, next: NextFunction) {
 
 async function startServer() {
   const app = express();
+
+  // -------------------------------------------------------------
+  // CORS MIDDLEWARE
+  // -------------------------------------------------------------
+  const allowedOrigins = [
+    'https://www.acranix.com',
+    'https://acranix.com',
+    'https://acranix.vercel.app',
+    'http://localhost:3000',
+    'http://localhost:5173',
+  ];
+
+  app.use(
+    cors({
+      origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+        if (
+          allowedOrigins.includes(origin) ||
+          origin.endsWith('.acranix.com') ||
+          origin.endsWith('.vercel.app')
+        ) {
+          return callback(null, true);
+        }
+        return callback(null, true);
+      },
+      credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+    })
+  );
+
+  // Preflight
+  app.options('*', cors());
+
   app.use(express.json());
 
   // -------------------------------------------------------------
   // 1. HEALTH & METADATA
   // -------------------------------------------------------------
-  app.get('/api/health', async (req, res) => {
-    const remote = await pingRemoteBackend();
+  app.get('/api/health', (req, res) => {
     res.json({
       status: 'online',
-      system: 'ACRANIX Core Intelligence Backend',
-      remoteBackend: {
-        url: REMOTE_BACKEND_URL,
-        isOnline: remote.isOnline,
-        latencyMs: remote.latencyMs,
-        lastChecked: remote.lastChecked,
-      },
+      service: 'ACRANIX Core Backend',
       timestamp: new Date().toISOString(),
-    });
-  });
-
-  // GET /api/backend-sync/status - Real-time connectivity to https://acranix.onrender.com
-  app.get('/api/backend-sync/status', async (req, res) => {
-    const remote = await pingRemoteBackend();
-    res.json({
-      success: true,
-      remoteBackendUrl: REMOTE_BACKEND_URL,
-      status: remote.isOnline ? 'connected' : 'offline_or_waking',
-      details: remote,
-      localMetrics: {
+      metrics: {
         totalUsers: db.users.length,
         totalSubmissions: db.submissions.length,
       },
-      timestamp: new Date().toISOString(),
     });
-  });
-
-  // POST /api/backend-sync/ping - Trigger immediate ping to remote
-  app.post('/api/backend-sync/ping', async (req, res) => {
-    const remote = await pingRemoteBackend();
-    res.json({
-      success: true,
-      remote,
-    });
-  });
-
-  // POST /api/backend-sync/sync-submissions - Bi-directional sync with Render backend
-  app.post('/api/backend-sync/sync-submissions', requireAdmin, async (req: AuthRequest, res) => {
-    try {
-      const remote = await pingRemoteBackend();
-      let syncedCount = 0;
-
-      if (remote.isOnline) {
-        // 1. Push local submissions to remote backend
-        for (const sub of db.submissions) {
-          syncWithRemoteBackend('/api/submissions', {
-            method: 'POST',
-            body: sub,
-          }).catch(() => {});
-        }
-
-        // 2. Try to fetch any remote submissions if supported
-        const remoteSubsRes = await syncWithRemoteBackend('/api/admin/submissions', {
-          headers: {
-            Authorization: req.headers['authorization'] as string || '',
-          },
-        });
-
-        if (remoteSubsRes && Array.isArray(remoteSubsRes.submissions)) {
-          for (const rSub of remoteSubsRes.submissions) {
-            if (rSub && rSub.id && !db.submissions.some((s) => s.id === rSub.id || (s.email === rSub.email && s.submittedAt === rSub.submittedAt))) {
-              db.submissions.unshift(rSub);
-              syncedCount++;
-            }
-          }
-          if (syncedCount > 0) {
-            saveDatabase(db);
-          }
-        }
-      }
-
-      res.json({
-        success: true,
-        message: remote.isOnline
-          ? `Integrated with ${REMOTE_BACKEND_URL}. Synced ${syncedCount} new records.`
-          : `Remote backend (${REMOTE_BACKEND_URL}) is waking up. Local records maintained safely.`,
-        remoteStatus: remote,
-        totalLocalSubmissions: db.submissions.length,
-      });
-    } catch (err: any) {
-      res.status(500).json({ error: 'Sync failed', details: err?.message });
-    }
   });
 
   // -------------------------------------------------------------
@@ -840,13 +697,7 @@ async function startServer() {
       db.submissions.unshift(newSubmission);
       saveDatabase(db);
 
-      // Asynchronously mirror submission to remote backend (https://acranix.onrender.com)
-      syncWithRemoteBackend('/api/submissions', {
-        method: 'POST',
-        body: newSubmission,
-      }).catch(() => {});
-
-      console.log(`[ACRANIX Intake] New Join Us submission recorded: ${newSubmission.name} (${newSubmission.email}) -> synced with ${REMOTE_BACKEND_URL}`);
+      console.log(`[ACRANIX Intake] New Join Us submission recorded: ${newSubmission.name} (${newSubmission.email})`);
 
       return res.status(201).json({
         message: 'Application recorded successfully.',

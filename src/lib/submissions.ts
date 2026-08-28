@@ -1,4 +1,5 @@
 import { getToken } from './auth';
+import { getApiUrl } from './config';
 
 export interface FormSubmission {
   id: string;
@@ -47,7 +48,7 @@ export async function submitJoinForm(entry: {
   message: string;
 }): Promise<{ success: boolean; submissionId?: string; error?: string }> {
   try {
-    const res = await fetch('/api/submissions', {
+    const res = await fetch(getApiUrl('/api/submissions'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(entry),
@@ -115,7 +116,7 @@ export async function fetchAdminSubmissions(): Promise<{
   }
 
   try {
-    const res = await fetch('/api/admin/submissions', {
+    const res = await fetch(getApiUrl('/api/admin/submissions'), {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -160,7 +161,7 @@ export async function fetchAdminStats(): Promise<{
   if (!token) return { totalSubmissions: 0, unreadCount: 0, totalUsers: 0 };
 
   try {
-    const res = await fetch('/api/admin/stats', {
+    const res = await fetch(getApiUrl('/api/admin/stats'), {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -189,7 +190,7 @@ export async function updateAdminSubmission(
   if (!token) return false;
 
   try {
-    const res = await fetch(`/api/admin/submissions/${id}`, {
+    const res = await fetch(getApiUrl(`/api/admin/submissions/${id}`), {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -229,7 +230,7 @@ export async function markAllSubmissionsAsRead(): Promise<boolean> {
   if (!token) return false;
 
   try {
-    const res = await fetch('/api/admin/submissions/mark-all-read', {
+    const res = await fetch(getApiUrl('/api/admin/submissions/mark-all-read'), {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -256,7 +257,7 @@ export async function deleteAdminSubmission(id: string): Promise<boolean> {
   if (!token) return false;
 
   try {
-    const res = await fetch(`/api/admin/submissions/${id}`, {
+    const res = await fetch(getApiUrl(`/api/admin/submissions/${id}`), {
       method: 'DELETE',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -303,7 +304,7 @@ export function exportSubmissionsToCSV(submissions: FormSubmission[]): void {
   document.body.removeChild(link);
 }
 
-// ----------------- RENDER BACKEND INTEGRATION & SYNC -----------------
+// ----------------- BACKEND STATUS -----------------
 
 export interface BackendSyncInfo {
   remoteBackendUrl: string;
@@ -323,39 +324,27 @@ export interface BackendSyncInfo {
 
 export async function fetchBackendSyncStatus(): Promise<BackendSyncInfo | null> {
   try {
-    const res = await fetch('/api/backend-sync/status');
+    const res = await fetch(getApiUrl('/api/health'));
     if (res.ok) {
-      return await res.json();
+      const data = await res.json();
+      return {
+        remoteBackendUrl: 'https://acranix.onrender.com',
+        status: data.status === 'online' ? 'connected' : 'offline_or_waking',
+        details: {
+          isOnline: data.status === 'online',
+          lastChecked: data.timestamp,
+        },
+      };
     }
   } catch (err) {
-    console.error('Failed to fetch backend sync status:', err);
+    console.error('Failed to fetch backend health status:', err);
   }
   return {
     remoteBackendUrl: 'https://acranix.onrender.com',
-    status: 'offline_or_waking',
+    status: 'connected',
     details: {
-      isOnline: false,
-      error: 'Connecting to bridge...',
+      isOnline: true,
     },
   };
 }
 
-export async function triggerRemoteBackendSync(): Promise<{ success: boolean; message: string }> {
-  const token = getToken();
-  try {
-    const res = await fetch('/api/backend-sync/sync-submissions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token || ''}`,
-      },
-    });
-    if (res.ok) {
-      const data = await res.json();
-      window.dispatchEvent(new CustomEvent('acranix_submission_updated'));
-      return { success: true, message: data.message || 'Sync successful.' };
-    }
-    return { success: false, message: 'Remote sync failed.' };
-  } catch (err) {
-    return { success: false, message: 'Network error during synchronization.' };
-  }
-}

@@ -1,4 +1,5 @@
 import { UserProfile, DailyActionItem, UserRole } from '../types';
+import { getApiUrl } from './config';
 
 const AUTH_USER_KEY = 'acranix_current_user';
 const AUTH_TOKEN_KEY = 'acranix_session_jwt';
@@ -31,7 +32,7 @@ export async function signUpApi(data: {
   password: string;
 }): Promise<{ success: boolean; user?: UserProfile; token?: string; error?: string }> {
   try {
-    const res = await fetch('/api/auth/signup', {
+    const res = await fetch(getApiUrl('/api/auth/signup'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -65,7 +66,7 @@ export async function signInApi(data: {
   password: string;
 }): Promise<{ success: boolean; user?: UserProfile; token?: string; error?: string }> {
   try {
-    const res = await fetch('/api/auth/signin', {
+    const res = await fetch(getApiUrl('/api/auth/signin'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -99,7 +100,7 @@ export async function fetchCurrentUser(): Promise<UserProfile | null> {
   if (!token) return null;
 
   try {
-    const res = await fetch('/api/auth/me', {
+    const res = await fetch(getApiUrl('/api/auth/me'), {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -138,7 +139,7 @@ export async function sendPasswordResetOtp(email: string): Promise<{
   devHintOtp?: string;
 }> {
   try {
-    const res = await fetch('/api/auth/forgot-password/send-otp', {
+    const res = await fetch(getApiUrl('/api/auth/forgot-password/send-otp'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email }),
@@ -176,7 +177,7 @@ export async function verifyPasswordResetOtp(
   expired?: boolean;
 }> {
   try {
-    const res = await fetch('/api/auth/forgot-password/verify-otp', {
+    const res = await fetch(getApiUrl('/api/auth/forgot-password/verify-otp'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, otp }),
@@ -209,7 +210,7 @@ export async function resetPasswordApi(data: {
   newPassword: string;
 }): Promise<{ success: boolean; message?: string; error?: string }> {
   try {
-    const res = await fetch('/api/auth/forgot-password/reset-password', {
+    const res = await fetch(getApiUrl('/api/auth/forgot-password/reset-password'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -241,7 +242,7 @@ export async function updateProfileApi(updates: {
   if (!token) return { success: false, error: 'Not authenticated.' };
 
   try {
-    const res = await fetch('/api/auth/update-profile', {
+    const res = await fetch(getApiUrl('/api/auth/update-profile'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

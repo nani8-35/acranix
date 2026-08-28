@@ -28,7 +28,6 @@ import {
   markAllSubmissionsAsRead,
   exportSubmissionsToCSV,
   fetchBackendSyncStatus,
-  triggerRemoteBackendSync,
   type FormSubmission,
   type BackendSyncInfo,
 } from '../lib/submissions';
@@ -46,9 +45,7 @@ export function AdminSubmissionsModal({ isOpen, onClose }: AdminSubmissionsModal
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedEmail, setCopiedEmail] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [syncing, setSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<BackendSyncInfo | null>(null);
-  const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
 
   const currentUser = getCurrentUser();
@@ -82,18 +79,6 @@ export function AdminSubmissionsModal({ isOpen, onClose }: AdminSubmissionsModal
         setSelectedSubmission(updated || null);
       }
     }
-  };
-
-  const handleTriggerSync = async () => {
-    setSyncing(true);
-    setSyncFeedback(null);
-    const res = await triggerRemoteBackendSync();
-    const updatedSync = await fetchBackendSyncStatus();
-    setSyncStatus(updatedSync);
-    setSyncFeedback(res.message);
-    setSyncing(false);
-    loadSubmissions();
-    setTimeout(() => setSyncFeedback(null), 4000);
   };
 
   useEffect(() => {
@@ -237,17 +222,6 @@ export function AdminSubmissionsModal({ isOpen, onClose }: AdminSubmissionsModal
           <div className="flex items-center gap-2">
             <button
               type="button"
-              id="sync-render-backend-btn"
-              onClick={handleTriggerSync}
-              disabled={syncing}
-              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#0a1a0f] border border-emerald-900/60 hover:border-emerald-500 text-emerald-300 hover:text-white text-xs font-mono transition-colors disabled:opacity-50"
-              title="Sync with Render backend https://acranix.onrender.com"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
-              <span>{syncing ? 'Syncing...' : 'Sync Render'}</span>
-            </button>
-            <button
-              type="button"
               id="export-submissions-csv-btn"
               onClick={() => exportSubmissionsToCSV(submissions)}
               disabled={submissions.length === 0}
@@ -293,7 +267,7 @@ export function AdminSubmissionsModal({ isOpen, onClose }: AdminSubmissionsModal
         <div className="px-6 py-2 bg-[#040404] border-b border-[#1c1c1c] flex flex-wrap items-center justify-between gap-3 text-[10px] font-mono">
           <div className="flex items-center gap-2 text-[#888888]">
             <Globe className="w-3 h-3 text-[#aaaaaa]" />
-            <span>Integrated Backend:</span>
+            <span>Render Backend:</span>
             <a
               href="https://acranix.onrender.com"
               target="_blank"
@@ -310,19 +284,9 @@ export function AdminSubmissionsModal({ isOpen, onClose }: AdminSubmissionsModal
               }`}
             >
               <span className={`w-1.5 h-1.5 rounded-full ${syncStatus?.status === 'connected' ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
-              {syncStatus?.status === 'connected' ? 'Connected & Active' : 'Standby / Synchronizing'}
+              {syncStatus?.status === 'connected' ? 'Connected & Active' : 'Connecting'}
             </span>
-            {syncStatus?.details?.latencyMs !== undefined && (
-              <span className="text-[#666666]">({syncStatus.details.latencyMs}ms)</span>
-            )}
           </div>
-
-          {syncFeedback && (
-            <div className="text-emerald-400 font-mono flex items-center gap-1 text-[10px]">
-              <Check className="w-3 h-3" />
-              <span>{syncFeedback}</span>
-            </div>
-          )}
         </div>
 
         {/* Search & Filter Bar */}
